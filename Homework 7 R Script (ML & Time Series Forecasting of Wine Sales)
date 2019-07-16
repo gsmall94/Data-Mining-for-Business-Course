@@ -1,0 +1,167 @@
+## Geoffrey Small
+## 04/04/2019
+## Instructor: Ted Kwartler
+
+## Purpose: Applying machine learning concepts to time series forecasting of wine sales. Short-term (2-3 months) forecasts for each of 6 series in Fig. 18.12
+
+#Question 18.9 (a.) - (b.)
+#units in thousands of liters
+
+library(MLmetrics)
+library(RCurl)
+library(forecast)
+library(ModelMetrics)
+library(lubridate)
+library(dplyr)
+library(dygraphs)
+library(ggplot2)
+options(scipen= 999)
+
+setwd('C:\\Users\\Gsmall\\OneDrive - Moderna Therapeutics\\MyPC\\Documents\\HW2 folder\\HW7')
+x <- getURL('https://raw.githubusercontent.com/kwartler/HarvardSpringStudent2019/master/bookDatasets/AustralianWines.csv')
+df <- read.csv(text= x, header= TRUE)
+
+#Detect and eliminate NA's in df:
+length(df[is.na(df)])
+df <- na.omit(df) 
+#EDA:
+dim(df)
+head(df)
+summary(df) #could also be used to detect NA's
+class(df$Month) #factor class. want time series
+class(df$Rose)  #factor class. want numeric
+
+cleanDate <- dmy(paste("01-", df$Month , sep =""))
+class(cleanDate)  #Date class
+df$Month <- cleanDate
+class(df$Month)   #From factor to date class
+
+colnames(df)[6] <- "Sweet White"
+colnames(df)[7] <- "Dry White"
+
+#Change to numeric:
+df$Fortified <- as.numeric(as.character(df$Fortified))  #use as.character first, as factor tupe are stored internally as integers and just as.numeric
+#                                                        would give internal interger codes
+df$Red <- as.numeric(as.character(df$Red))
+df$Rose <- as.numeric(as.character(df$Rose))
+df$sparkling <- as.numeric(as.character(df$sparkling))
+df$`Sweet White` <- as.numeric(as.character(df$`Sweet White`))
+df$`Dry White` <- as.numeric(as.character(df$`Dry White`))
+
+#Notice that 2 Rose Values are "*" - fill in with means and round to nearest whole #:
+df$Rose[175] <- round(mean(df$Rose[169:180], na.rm= T), digits=0)
+df$Rose[176] <- round(mean(df$Rose[169:180], na.rm= T), digits= 0)
+
+
+#Comprehensive Time Series:
+fort1 <- ts(df$Fortified, start= c(1980, 1), end= c(1994, 12), frequency= 12)
+plot(fort1, xlab= "Month", ylab= "Sales (*10^3 L)", main= "Fortified Wine Sales")
+red1 <- ts(df$Red, start= c(1980, 1), end= c(1994, 12), frequency= 12)
+plot(red1, xlab= "Month", ylab= "Sales (*10^3 L)", main= "Red Wine Sales")
+rose1 <- ts(df$Rose, start= c(1980, 1), end= c(1994, 12), frequency= 12)
+plot(rose1, xlab= "Month", ylab= "Sales (*10^3 L)", main= "Rose Wine Sales")
+spark1 <- ts(df$sparkling, start= c(1980, 1), end= c(1994, 12), frequency= 12)
+plot(spark1, xlab= "Month", ylab= "Sales (*10^3 L)", main= "Sparkling Wine Sales")
+sweetw1 <- ts(df$`Sweet White`, start= c(1980, 1), end= c(1994, 12), frequency= 12)
+plot(sweetw1, xlab= "Month", ylab= "Sales (*10^3 L)", main= "Sweet White Wine Sales")
+dryw1 <- ts(df$`Dry White`, start= c(1980, 1), end= c(1994, 12), frequency= 12)
+plot(dryw1, xlab= "Month", ylab= "Sales (*10^3 L)", main= "Dry White Wine Sales")
+
+#Some decomposition plots to look at trends and seasonalities:
+plot(as.ts(df))
+fort1_decomp <- decompose(fort1, type= "multiplicative")
+plot(fort1_decomp)
+red1_decomp <- decompose(red1, type= "multiplicative")
+plot(red1_decomp)
+dryw1_decomp <- decompose(dryw1, type= "multiplicative")
+plot(dryw1_decomp)
+spark1_decomp <- decompose(spark1, type= "multiplicative")
+plot(spark1_decomp)
+
+#Some basic forecasts ahead 2 months (for fortified wine sales):
+#Time Series Linear Model:
+fortwine.lm <- tslm(fort1 ~ trend + season)                                          
+plot(fort1, main= "Fortified Wine Sales with TSLM", xlab= "Month", ylab= "Sales (*10^3 L)")
+lines(fortwine.lm$fitted.values, lwd = 2)
+#Seasonal Naive forecast 2 months:
+seasonalNaive1 <- snaive(fort1, h=2)
+plot(seasonalNaive1, main= "Fortified Wine Sales with Seasonal Naive", xlab= "Month", ylab= "Sales (*10^3 L)")
+#Linear model with trend and season fit the data well.
+
+#ANSWER (PART A): The time series for the given sales for the different types of wines seem to indicate a multiplicative time series, due to the increasing trend associated with
+#                 the amplitude of seasonal activity changing over time in the oberved time series. Additionally, the residuals show significant fluctuations over time.
+#                 However, the models still exhibit seasonality with different trend behavior, thus I would choose the Holt-Winter Exponenential Smoothing Method.
+#                 Another benefit of choosing the HW method in this case, is due to the fact that it is an adaptive, data-driven method. 
+
+
+
+#End of Part A.................................................................................................................................................
+
+
+
+
+#PART B..........................................................................................................................................................
+#For prediction --> # months is validation set (12) + new (2) = 14
+
+#Split Dataset into Training (older) and Validation (newer) for Forecasting:
+dftrain <- df[1:168, ]
+dfvalid <- df[169:180, ]
+traints <- ts(dftrain$Fortified, start= c(1980, 1), frequency= 12)
+validts <- ts(dfvalid$Fortified, start= c(1994, 1), frequency= 12)
+
+#Want to use Holt-Winters to forecast next two months
+#H-W on overall Fortified wine data:
+dfHW <- HoltWinters(fort1, seasonal= "multiplicative")
+plot(dfHW)
+predict(dfHW, 2)  #2 month prediction
+
+#Refit HW with training set:
+dfHW <- HoltWinters(traints, seasonal= "multiplicative")
+plot(dfHW)
+
+#Make Validation set predictions and compare/examine the fit
+validforecast <- predict(dfHW, 12)
+validdf <- data.frame(idx = seq_along(validforecast), original= dfvalid$Fortified, fit= validforecast)
+
+#visualize HW fit from training data, applied to the validation data:
+ggplot(validdf) +
+  geom_line(aes(x=idx, y=original)) +
+  geom_line(aes(x=idx, y=fit), colour='red') + theme_bw()
+#From the plot, it seems that the HW method fits the data well
+
+#Error in validation set forecasts:
+RMSE(validdf$original, validdf$fit)  #RMSE = 330.5
+MAPE(validdf$original, validdf$fit)  #MAPE = 0.1247
+#Error calculation from original validation vs fit validation set shows that we can expect RMSE of 330.5 (*10^3 L) of error in
+#forecasted futue predictions.
+
+
+#Look ahead to the future 2 months (forecasting):
+predval <- forecast(dfHW, h= 14)  #valid set + 2 additional months
+predvalext <- forecast(dfHW, h= 16) #take a look an additional 2 months (extended predval)
+
+plot(predval)      #plot of forecast
+plot(predvalext)   #plot of more-extended forecast
+dygraph(predval)
+
+plot(predval$residuals) #valid set + 2 additional months RESIDUALS
+plot(predvalext$residuals)  #Residuals plot for extended forecast (above + 2 additional months added)
+
+
+#ALTERNATIVELY, it may be possible to apply time series linear model:........................................................................................................
+
+#training set (tslm):
+traininglm <- tslm(traints ~ trend + season)  #see both trend and seasonality
+tlmpredict <- forecast(traininglm, h= 12, level= 0)
+tlmpredict
+plot(tlmpredict)
+RMSE(dfvalid$Fortified, tlmpredict$mean)  #RSME= 426.5 for tslm model fitting, which is higher error than HW method.
+plot(tlmpredict$residuals)                #Residuals plot for tslm model
+#Using tslm to make future 2 month prediction:
+tlmpredictext <- forecast(traininglm, h= 14, level= 0)
+plot(tlmpredictext)  
+
+
+
+
+#END of Part B...........................................................................................................................................................................
