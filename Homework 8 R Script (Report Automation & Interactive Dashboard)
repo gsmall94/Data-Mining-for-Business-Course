@@ -13,7 +13,7 @@ library(officer)
 library(flextable)
 library(ggplot2)
 
-setwd('C:\\Users\\Gsmall\\OneDrive - Moderna Therapeutics\\MyPC\\Documents\\HW2 folder\\HW8')
+setwd(...)
 x <- getURL('https://raw.githubusercontent.com/kwartler/HarvardSpringStudent2019/master/lessons/9_Apr3_APIs_ReportingAutomation/wk9_data/pretendWk3_patients.csv')
 wk3df <- read.csv(text= x, header= T)
 y <- getURL('https://raw.githubusercontent.com/kwartler/HarvardSpringStudent2019/master/lessons/9_Apr3_APIs_ReportingAutomation/wk9_data/pretendWk2_patients.csv')
