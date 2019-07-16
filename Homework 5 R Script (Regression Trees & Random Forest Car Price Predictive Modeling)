@@ -1,0 +1,160 @@
+#Geoffrey Small
+#Data Mining for Business HW#5
+#03/14/2019
+#Instructor: Ted Kwartler
+
+## Purpose: Apply Regression Tree and Random Forest ML algorithms for predictive modeling of car prices, given car specifications
+
+#PROBLEM C9.3 (a.)
+#........................................................................................................................
+#install.packages('rpart.plot')
+#install.packages('randomForest')
+
+library(RCurl)
+library(caret)
+library(vtreat)
+library(rpart.plot)
+library(randomForest)
+library(ModelMetrics)
+
+setwd(...)
+x <- getURL('https://raw.githubusercontent.com/kwartler/HarvardSpringStudent2019/master/bookDatasets/ToyotaCorolla.csv')
+toyota.df <- read.csv(text= x, header= TRUE)
+summary(toyota.df)
+names(toyota.df) #39 vectors comprising columns of dataframe
+class(toyota.df$Price) #integer class for price
+
+#Bias against scientific notation usage:
+options(scipen=999)
+
+
+#Data Preprocessing
+splitpercent <- round(nrow(toyota.df) %*% .6)
+totalrecords <- 1:nrow(toyota.df)
+set.seed(12345)
+idx <- sample(totalrecords, splitpercent)
+
+trainDat <- toyota.df[idx,]
+valDat <- toyota.df[-idx,]
+
+#names(valDat)[c(4,7,8,9,12,14,17,19,21,25,26,28,30,34,39)] #correct
+targetvar <- names(trainDat)[3]
+informativevars <- names(trainDat)[c(4,7,8,9,12,14,17,19,21,25,26,28,30,34,39)]
+
+#Design numeric/atomic variable treatment plan:
+plan <- designTreatmentsN(toyota.df, informativevars, targetvar)
+
+treatedtrain <- prepare(plan, trainDat)
+treatedval <- prepare(plan, valDat)
+
+#9.3a (i.).......................................................................................................................................
+
+#rpart for regression tree:
+#minbucket is min # of observations in any terminal (leaf) node
+#minsplit is min # of observations needed in node for split to be attempted
+#Do not use "." in form y ~ ., as this tells function to use all predictors. Use following form:
+#Cannot set maxdepth to 100; set to 30 instead:
+
+fit1 <- rpart(Price ~ .,
+              data= treatedtrain, method= "anova", minsplit= 1, minbucket= 1, maxdepth= 30, cp= 0.001)
+#fit1
+#printcp(fit1)
+
+#Visualize with prp(). extra= 1 to display # observations falling into each separate node:
+prp(fit1, type= 1, extra= 1, under= TRUE, split.font= 1, varlen= 7)
+
+#Training accuracy and final class/actuals:
+trainprob <- predict(fit1, type= "vector")
+head(trainprob)                           #corrects dimensions of data frames, as they behave like matrices. Need to "reshape" trainprob
+require(reshape2)
+trainprob$id <- rownames(trainprob)
+trainprob1 <- melt(trainprob)
+
+traineval <- data.frame(predictval= trainprob1$value, actual= treatedtrain$Price)
+head(traineval)
+
+
+#Validation Set:
+validprob <- predict(fit1, treatedval, type= "vector")
+head(validprob)                                         #same "reshaping" as before, but with the validation data
+require(reshape2)
+validprob$id <- rownames(validprob)
+validprob1 <- melt(validprob)
+
+valeval <-data.frame(predictedval= validprob1$value, actual= treatedval$Price)
+head(valeval)
+
+
+#PART (i.) ANSWER: The 3 most importanti car specs for predicting price in this model are: Age, KM, and Quarterly Tax 
+
+
+
+#9.3a (ii.)...........................................................................................................................
+
+#RMSE: I will try "MLmetrics" package this time, instead of "ModelMetrics":
+#install.packages('MLmetrics')
+#install.packages('forecast')
+library(MLmetrics)
+library(forecast)
+library(ggplot2)
+
+#RMSE for TRAINING SET:
+trainingRMSE <- ModelMetrics::rmse(trainprob1$value, treatedtrain$Price)
+#or
+accuracy(trainprob1$value, treatedtrain$Price)
+
+#RMSE for VALIDATION SET:
+validationRMSE <- ModelMetrics::rmse(validprob1$value, treatedval$Price)
+#or
+accuracy(validprob1$value, treatedval$Price)
+
+#trainingRMSE      # ANS: RMSE = 955.2446
+#validationRMSE    # ANS: RMSE = 1358.621
+
+#RMSE plot creation:
+
+#For some reason, the script was giving me an error that was not consistent with what variable/dataframe information is in the environment window
+
+#ggplot()
+#ggplot(validprob1) + geom_boxplot(aes(x = L1, y = value )) + ylab('Predicted Price') + xlab("Data Point (Validation set)")
+#ggplot(trainprob1) + geom_boxplot(aes(x = L1, y = value )) + ylab('Predicted Price') + xlab("Data Point (Training set)")
+#boxplot(trainprob1 ~ validprob1)
+
+
+#PART (ii.) ANSWERS: from the lines above, the training set has a lesser error, which is expected as the model was trained striclty with these data.
+#    The error for the validation set will be higher, as this data set is being used to assess the model's predictive performance. The model was not trained on these data
+
+
+
+#9.3a (iii.).......................................................................................................................................
+
+#ANSWER: In general, there will be some degree of error in a model when it has completed the training data and is displaying its predictive perfomance with new records.
+#      Unfavorable values would be obtaining by use of an unfavorable cp value (ex. cp=-1), which would result in too large of a tree, thus overfitting training record predictions.
+#      If your model displays very little to no error in it's predictions and training data fittings, it could very well be overfit. This would lead to incorrect test/validation values.
+
+
+
+#9.3a (iv.).......................................................................................................................................
+
+printcp(fit1)
+#adapted from course texbook (p 231):
+pruned.ct <- prune(fit1,
+                   cp = fit1$cptable[which.min(fit1$cptable[,"xerror"]),"CP"]) #takes the lower cp value for fit1 model, to be used for pruning
+length(pruned.ct$frame$var[pruned.ct$frame$var == "<leaf>"])                  #"xerror" refers to the cross validation error for the model. Use this for the pruning
+prp(pruned.ct, type = 1, extra = 1, split.font = 1, varlen = -10)  #create pruned regression tree visual
+
+#the regression tree was pruned, but not by much
+
+#Validation Set (Pruned):
+validprobprun <- predict(pruned.ct, treatedval, type= "vector")
+head(validprobprun)                                         #same "reshaping" as before, but with the validation data
+require(reshape2)
+validprobprun$id <- rownames(validprobprun)
+validprobprun1 <- melt(validprobprun)
+
+valevalprun <-data.frame(predictedval= validprobprun1$value, actual= treatedval$Price)
+head(valeval)
+
+accuracy(validprobprun1$value, treatedval$Price) 
+
+#ANSWER: The RMSE is slightly less (1329.997 pruned vs. 1358.621 unpruned)
