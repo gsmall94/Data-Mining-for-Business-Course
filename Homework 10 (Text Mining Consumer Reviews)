@@ -6,7 +6,7 @@
 # Instructor: Ted Kwartler
 
 # Set working directory
-setwd('C:\\Users\\Gsmall\\OneDrive - Moderna Therapeutics\\MyPC\\Documents\\HW2 folder\\HW10')
+setwd(...)
 
 # Call Libraries
 library(tm) #tm package 
