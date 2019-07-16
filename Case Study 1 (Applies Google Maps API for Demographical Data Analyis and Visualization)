@@ -1,0 +1,212 @@
+#' Author: Geoffrey Small
+#' Date: 2-20-2019
+#' Purpose: OKCupid Case Supplemental. Uses Google Maps API for heat map creation of crime levels, and exploratory data analysis and visualization.
+#' 
+
+# Set WD
+setwd('C:\\Users\\Gsmall\\OneDrive - Moderna Therapeutics\\MyPC\\Documents\\RCase1')
+
+#install packages
+install.packages('okcupiddata')
+
+library(okcupiddata)
+
+
+#Call necessary urls and read into csv files:
+x <- getURL("https://raw.githubusercontent.com/kwartler/HarvardSpringStudent2019/master/cases/Ok%20Cupid/LatLon.csv")
+y <- getURL("https://raw.githubusercontent.com/kwartler/HarvardSpringStudent2019/master/cases/Ok%20Cupid/addr.csv")
+z <- getURL("https://raw.githubusercontent.com/kwartler/HarvardSpringStudent2019/master/cases/Ok%20Cupid/sharedCensus2010Vars.csv")
+latlon <- read.csv(text= x, header= TRUE)
+addr <- read.csv(text= y, header= TRUE)
+sharecensus <- read.csv(text= z, header= TRUE)
+
+# Libs
+library(okcupiddata)
+library(dplyr)
+library(ggplot2)
+library(ggmap)
+library(ggthemes)
+library(RgoogleMaps)
+library(maptools)
+library(RCurl)
+library(tidyverse)
+library(stringr)
+library(plyr)
+library(tibble)
+library(viridisLite)
+
+#viridis package to help color and polish the heat map
+#install.packages('viridis')
+library(viridis)
+
+#call google api key for mapping use:
+register_google(key= "AIzaSyDLXsu2GoaDLDwBUu2ZqcrznPqEmJ4g1ng")
+# Get the okcupid data as `profiles`
+data('profiles')
+is.recursive(profiles)        #yes
+is.atomic(profiles)           #no, but when we assign 'profiles' to variable, it becomes vector
+#create data fram of profiles 
+df <- as.data.frame(profiles)
+summary(df)                   #gives classes of different components
+
+#preliminary sorting/trimming - remove rows lacking income data
+df <- df[rowSums(is.na(df)) == 0, ]
+#df is big; need to remove columns for sake of time with geocode. this samples large number of rows at random, and deletes specified number. 
+#assigns this reduced data frame to new variable, df2.
+#df.new <- df[-sample(1:nrow(df), 57000), ] #DO NOT NEED TO TRIM, AS income data are already few in #
+
+#geocode takes a lot of time to assign lat and lon values using google API key. 
+#I have trimmed the numbers of profiles randomly just for this heatmap exhibit.
+
+#creat lat and lon for each location data point, using geocode
+geocoded <- data.frame(stringsAsFactors= FALSE)
+invisible(for(i in 1:nrow(df))
+{
+  result <- geocode(df$location[i], output= "latlona", source= "google")
+  df$lon[i] <- as.numeric(result[1])
+  df$lat[i] <- as.numeric(result[2])
+  df$geoAddress[i] <- as.character(result[3])
+})
+
+#make new csv file with the new columns:
+write.csv(df, "geocodedaddress.csv", row.names= FALSE)
+
+library(grid)
+#create heatmap:
+ggplot() + geom_point(data= df, aes( x= lon, y= lat), alpha = 0.7 )
+ggplot() + stat_density2d(data= df, aes(x= lon, y= lat))
+map1 <- get_map("san francisco, california, united states", zoom =11, maptype = 'satellite')
+map2 <- get_map("san francisco, california, united states", zoom =9, maptype = 'satellite')
+ggmap(map1) + stat_density2d(data = df , aes(x= df$lon, y= df$lat, fill= ..density..), geom= "tile", contour= F, alpha= 0.5) +
+  scale_fill_viridis(option= "inferno") +
+  labs(title = str_c('Distribution of users who submitted incomes on OKCupid profiles'
+  )
+  ,subtitle = 'Out of 2077 incomes provided, only 5 outliers in other states are ommitted'
+  ,fill = str_c('Number of profiles')
+  ) +
+  theme(text = element_text(color = "#444444")
+        ,plot.title = element_text(size = 22, face = 'bold')
+        ,plot.subtitle = element_text(size = 12)
+        ,axis.text = element_blank()
+        ,axis.title = element_blank()
+        ,axis.ticks = element_blank()
+  ) +
+  guides(fill = guide_legend(override.aes= list(alpha = 1)))
+
+ ggmap(map2) + stat_density2d(data = df , aes(x= df$lon, y= df$lat, fill= ..density..), geom= "tile", contour= F, alpha= 0.5) +
+  scale_fill_viridis(option= "inferno") + labs(title = str_c('Distribution of users who submitted incomes on OKCupid profiles'
+  )
+  ,subtitle = 'Out of 2077 incomes provided, only 5 outliers in other states are ommitted'
+  ,fill = str_c('Number of profiles')
+  ) +
+   theme(text = element_text(color = "#444444")
+         ,plot.title = element_text(size = 22, face = 'bold')
+         ,plot.subtitle = element_text(size = 12)
+         ,axis.text = element_blank()
+         ,axis.title = element_blank()
+         ,axis.ticks = element_blank()
+   ) +
+   guides(fill = guide_legend(override.aes= list(alpha = 1)))
+ 
+
+ 
+#I tried to make inset plot, but failed. here is how far I got:
+grid1 <- ggplotGrob(gmap1)
+grid.draw(grid1)
+
+pushViewport( viewport(x=0.25, y=0.8, w=.3, h=.3) )
+xy <- data.frame(x=c(-122.50,-122.50,-121.50,-121.50,-122.50), 
+                 y=c(38.50,37.00,37.00,38.50,38.50))
+p2 <- gmap2
+g2 <- ggplotGrob(p2)
+grid.draw(g2)
+grid.rect(gp=gpar(col="white", lwd=5))
+popViewport()
+
+#END of heatmap data
+
+#make plot of county incomes frequency
+library(sp)
+library(maps)
+
+#NOTE: following adapted from: https://stackoverflow.com/questions/13316185/r-convert-zipcode-or-lat-long-to-county
+
+# The single argument to this function, pointsDF, is a data.frame in which:
+#   - column 1 contains the longitude in degrees (negative in the US)
+#   - column 2 contains the latitude in degrees
+
+latlong2county <- function(df) {
+  # Prepare SpatialPolygons object with one SpatialPolygon
+  # per county
+  counties <- map('county', fill=TRUE, col="transparent", plot=FALSE)
+  IDs <- sapply(strsplit(counties$names, ":"), function(x) x[1])
+  counties_sp <- map2SpatialPolygons(counties, IDs=IDs,
+                                     proj4string=CRS("+proj=longlat +datum=wgs84"))
+  
+  # Convert pointsDF to a SpatialPoints object 
+  pointsSP <- SpatialPoints(df, 
+                            proj4string=CRS("+proj=longlat +datum=wgs84"))
+  
+  # Use 'over' to get _indices_ of the Polygons object containing each point 
+  indices <- over(pointsSP, counties_sp)
+  
+  # Return the county names of the Polygons object containing each point
+  countyNames <- sapply(counties_sp@polygons, function(x) x@ID)
+  countyNames[indices]
+}
+#END OF ADAPTED CODE
+
+#use newly creacted function to convert coordinates to county names
+xm <- data.frame(x = df$lon, y= df$lat)
+xf <- data.frame(latlong2county(xm))             
+
+xf2 <- table(latlong2county(xm))
+par(mar=c(11,6,4,1), las=2)
+barplot(xf2, main = "Number of profiles posted vs. location", ylab = "Number of Profiles")
+
+df2 <- data.frame(c(df, xf))
+
+m1 <- aggregate(df2[,9,26], list(df2$latlong2county.xm.), mean)
+m2 <- cbind(m1, xf2)
+m2 <- data.frame(m2)
+
+colnames(m2)[1] <- "State, County"
+colnames(m2)[2] <- "Average Income ($USD)"
+colnames(m2)[3] <- "County"
+colnames(m2)[4] <- "Frequency (counts)"
+
+
+barplot(m2$`Average Income ($USD)`)
+
+#Make a nicer table of m2 (just above), using grid graphics:
+library(grid)
+library(gridExtra)
+par(mar=c(11,10,4,18))
+grid.table(m2)
+
+
+
+
+#END OF THIS DATA SET
+
+#plot of body type vs. drug, alcohol, diet:
+
+data(profiles)
+dat1 <- data.frame(profiles$body_type, profiles$diet, profiles$drinks, profiles$drugs)
+dat1 <- dat1[rowSums(is.na(dat1)) == 0, ]
+
+colnames(dat1)[1] <- "Body Type"
+colnames(dat1)[2] <- "Diet"
+colnames(dat1)[3] <- "Drinks"
+colnames(dat1)[4] <- "Drugs"
+
+counts <- table(dat1$`Body Type`, dat1$Diet)
+barplot(counts, main="Body Type Dist.",
+        xlab="body type", col=c("darkblue","red"),
+        legend = rownames(counts))
+
+
+
+
+# End
+
