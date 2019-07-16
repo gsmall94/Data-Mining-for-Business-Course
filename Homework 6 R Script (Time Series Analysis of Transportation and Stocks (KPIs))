@@ -12,7 +12,7 @@ library(lubridate)
 library(dplyr)
 library(dygraphs)
 
-setwd('C:\\Users\\Gsmall\\OneDrive - Moderna Therapeutics\\MyPC\\Documents\\HW2 folder\\HW6')
+setwd(...)
 x <- getURL('https://raw.githubusercontent.com/kwartler/HarvardSpringStudent2019/212ab51e08d1ff8511e2f553eea99b530c05be3a/bookDatasets/Sept11Travel_REVISED.csv')
 df <- read.csv(text= x, header= TRUE)
 
