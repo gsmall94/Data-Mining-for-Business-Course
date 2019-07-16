@@ -14,7 +14,7 @@ library(RColorBrewer)
 library(arulesViz)
 
 ##Set WD:
-setwd('C:\\Users\\Gsmall\\OneDrive - Moderna Therapeutics\\MyPC\\Documents\\HW2 folder\\HW9')
+setwd(...)
 x <- getURL('https://raw.githubusercontent.com/kwartler/HarvardSpringStudent2019/master/bookDatasets/Coursetopics.csv')
 ct_df <- read.csv(text= x, header= T)
 #Data shown in ct_df represents purchaes of online stats courses. Each row has courses attended by single customer
