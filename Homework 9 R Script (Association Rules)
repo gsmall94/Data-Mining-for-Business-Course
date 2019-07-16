@@ -1,0 +1,110 @@
+### Homework 09, Problem 14.2
+### Geoffrey Small
+### April 18, 2019
+### Instructor: Ted Kwartler
+
+## GOAL: Assess alternative sequences and bundling of courses, using association rules for analysis. Interpret several resulting rules.
+
+
+### PROBLEM 14.2............................................................................................................................
+library(RCurl)
+library(arules)
+library(dplyr)
+library(RColorBrewer)
+library(arulesViz)
+
+##Set WD:
+setwd('C:\\Users\\Gsmall\\OneDrive - Moderna Therapeutics\\MyPC\\Documents\\HW2 folder\\HW9')
+x <- getURL('https://raw.githubusercontent.com/kwartler/HarvardSpringStudent2019/master/bookDatasets/Coursetopics.csv')
+ct_df <- read.csv(text= x, header= T)
+#Data shown in ct_df represents purchaes of online stats courses. Each row has courses attended by single customer
+#ct_df has 365 rows of 8 variables
+
+##Convert df to matrix:
+str(ct_df) #All integer class, as expected
+ct_matrix <- as.matrix(ct_df)
+ct_trans <- as(ct_matrix, "transactions")    #Need to convert ct_df to ct_matrix before appling as()
+class(ct_trans)    #Above line as() converts ct_matrix to ct_trans of "transactions" object class
+#inspect(ct_trans)    #Allows us to see transcation itemsets per customer 
+
+#EDA to get an idea of what is needed for support and confidence:
+itemFrequencyPlot(ct_trans, topN= 8, type= "absolute", col=brewer.pal(8, 'Pastel2'), main= "Absolute Frequency of CoursePurchases")
+summary(itemFrequency(ct_trans, type= "absolute"))
+
+##Apply apriori Algo:
+ct_rules <- apriori(ct_trans, parameter= list(supp= 0.1, conf= 0.3, target= "rules"))
+
+#Inspect first 8 rules, sort by lift:
+inspect(head(sort(ct_rules, by= "lift"), n= 8))
+#rulesdf <- as.data.frame(ct_rules)    #for some reason, this gives me an error message, despite as() working fine
+str(ct_rules)
+rulesdf <- as(ct_rules, 'data.frame')
+rulesdf[rulesdf$support >= 0.04 & rulesdf$confidence >= 0.7, ]    #min. support: 4%, min. conf.= 70%
+
+### Instance 1 (above code):.......................................................................................................
+
+## Using the apriori function, i set support to minimum of 0.1 (10% of transactions having both antecedent and consequent), confidence to 30%,
+## which yielded 1 rule with support of 39%, confidence of 39%, and lift of 1.0. The support indicates that this rule occurs in 144/365 customers,
+## and the confidence is high, suggesting a strong association rule (same with the lift ratio). However, all this rule does is tells us that if we have a new customer with
+## zero purchases (empty set antecedent), they are most likely going to take an introductory stats course. This is obvious.
+
+#......................................................................................................................................
+
+### Instance 2:
+ct_rules <- apriori(ct_trans, parameter= list(supp= 10/365, conf= 0.5, target= "rules"))
+rulesdf <- as(ct_rules, 'data.frame')
+plot(ct_rules)
+
+## One association rule that immediately stands out is: {DataMining,Regression} => {Cat.Data}, occurring in 2.7% of the sample size (support),
+## with confidence of 62.5% (meaning that 62.5% of the cases with the antecedents follow this rule), with a high measure of association (lift of 3.0)
+## Due to this, it may be useful to provide suggestions of the Cat. data course to customers who have taken the two aforementioned courses
+
+## However, there is also at least one rule that can be eliminated: {Cat.Data,Regression} => {Intro}. This rule has a support of over 3%, with confidence of
+## 60% and lift ratio > 1.5. From these values alone, it seems like this would be a good rule to implement; however, it is illogical for a customer who has taken
+## more advanced courses to then enroll in an intro course (unless they are able to take all 3 at the same time). This also holds for the other rules present, where
+## the customer enrolls in the intro course after more advanced courses. Unless the antecedent is an empty set (no prior courses), such behavior seems unlikely.
+
+#....................................................................................................................................................
+
+### Instance 3:
+ct_rules <- apriori(ct_trans, parameter= list(supp= 8/365, conf= 0.5, target= "rules"))
+rulesdf <- as(ct_rules, 'data.frame')
+plot(ct_rules)
+plot(ct_rules, method= "graph", engine= "htmlwidget")
+
+## At the expense of narrowing support, two potential rules appeared from the above apriori function: {Intro,DOE} => {SW}, and {Intro,Survey} => {SW}.
+## the first association rule has a support of 3% (11/365 transactions), with a confidence over 60% and a strong association measure from a lift > 2.9
+## The rule also makes logical sense, as someone with intro and design of experiments courses would be fit to take another more advanced course. 
+## The second rule chosen has similar support (12/365 transactions),a confidence of 60% (60% of the time, this rule is correct, when the antecedents occur), and a decent lift value > 1. Given the small size of our transactional
+## database, these two association rules seem fitting.
+
+## It should also be noted that the above plot code (with html widget) helps visualize the different association rules and how they may be chosen/implemented.
+
+#.................................................................................................................................................
+
+### Instance 4:
+ct_rules <- apriori(ct_trans, parameter= list(supp= 6/365, conf= 0.5, target= "rules"))
+rulesdf <- as(ct_rules, 'data.frame')
+plot(ct_rules)
+plot(ct_rules, method= "graph", engine= "htmlwidget")
+inspect(head(sort(ct_rules, by= "lift"), n= 8))
+
+## Lowering the support to 6/365 transactions with antecedent and consequent yields a couple other potential association rules: {Intro,DataMining,Cat.Data} => {Regression},
+## and {Intro,Regression,DOE} => {SW}. These two rules have support < 2% (6/365 and 7/365 transactions, respectively), but have confidence values >= 75%, which means that these rules 
+## generally hold true. Additionally, lift ratios > 3.5 indicate that these are strong associations. These rules also make sense, since they include starting with the intro course, then
+## proceeding to more advanced topics. But the fact that the intro course is the first element in the antecedents set (first course taken), it strengthens the argument that these two rules could be used
+## and are consistent with actions a human customer might take.
+
+
+
+### END OF PROBLEM 14.2.....................................................................................................................................
+
+# Question:
+# "Before" working on an Rmd and its HTML files,
+# have you double checked that your R code is error free
+# by executing Ctrl+Alt+R or Cmd+Alt+R in this R script?
+#
+# Answer (Yes or No): Yes
+
+### END.................................................................................................................................................
+
