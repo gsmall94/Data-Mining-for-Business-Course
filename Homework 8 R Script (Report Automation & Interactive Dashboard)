@@ -1,0 +1,105 @@
+##Author: Geoffrey Small
+##Assignment: HW 8
+##Date: 04/11/2019
+##Instructor: Ted Kwartler
+
+##Purpose: Report Automation using R, as well as creation of interactive dashboard (flexdashboard)
+
+
+#Libraries and set working directory:
+library(dplyr)
+library(RCurl)
+library(officer)
+library(flextable)
+library(ggplot2)
+
+setwd('C:\\Users\\Gsmall\\OneDrive - Moderna Therapeutics\\MyPC\\Documents\\HW2 folder\\HW8')
+x <- getURL('https://raw.githubusercontent.com/kwartler/HarvardSpringStudent2019/master/lessons/9_Apr3_APIs_ReportingAutomation/wk9_data/pretendWk3_patients.csv')
+wk3df <- read.csv(text= x, header= T)
+y <- getURL('https://raw.githubusercontent.com/kwartler/HarvardSpringStudent2019/master/lessons/9_Apr3_APIs_ReportingAutomation/wk9_data/pretendWk2_patients.csv')
+wk2df <- read.csv(text= y, header= T)
+
+#ppt inputs:
+author <- 'Geoff Small'
+theme <- 'Dividend'
+
+#Create ppt and Title Slide:
+pptx <- read_pptx('example_1.pptx')
+layout_summary(pptx)   #master = Dividend
+titletext <- paste(Sys.Date(), 'Patient Review in an ugly Power Point Theme')
+pptx <- add_slide(pptx, layout= "Title Slide", master= theme)
+pptx <- ph_with_text(pptx, type= "ctrTitle", str= titletext)
+pptx <- ph_with_text(pptx, type= "subTitle", str= author)
+pptx <- ph_with_img(pptx, type= "body", src= "Boston-Mass-Seaport-Real-Estate.jpg", height= 2.5, width= 6, index= 1)
+
+
+#Add "Two Content Slide":
+pptx <- add_slide(pptx, layout= "Two Content", master= theme)
+pptx <- ph_with_text(pptx, type= "title", str= "Week 3 data")
+pl <- ggplot(data= wk3df) + geom_histogram(aes(age)) + ggtitle("Week 3 Admitted Patient Numbers")             #create plot of age data from Week 3 set
+pptx <- ph_with_gg(pptx, value= pl, index= 2)
+pptx <- ph_with_img(pptx, type= "body", src= 'ed.jpg', height= 3, width= 4.5, index=3)
+
+
+pptx <- add_slide(pptx, layout= "Two Content", master= theme)
+pptx <- ph_with_text(pptx, type= "title", str= "Week 3 data (Cont.)")
+pl2 <- ggplot(data= wk3df) + geom_bar(aes(admission_type_id)) + ggtitle("Admission Type")
+pptx <- ph_with_gg(pptx, value= pl2, index= 3)
+
+#Table Creation + Flextable:
+##Week 3 data:
+avglabs3 <- mean(wk3df$num_lab_procedures)
+avgmeds3 <- mean(wk3df$num_medications)
+avgproc3 <- mean(wk3df$num_procedures)
+avgem3 <- mean(wk3df$number_emergency)
+avgage3 <- mean(wk3df$age)
+females3 <- as.matrix(table(wk3df$gender))[1,1]
+males3 <- as.matrix(table(wk3df$gender))[2,1]
+
+##Week 2 data:
+avglabs2 <- mean(wk2df$num_lab_procedures)
+avgmeds2 <- mean(wk2df$num_medications)
+avgproc2 <- mean(wk2df$num_procedures)
+avgem2 <- mean(wk2df$number_emergency)
+avgage2 <- mean(wk2df$age)
+females2 <- as.matrix(table(wk2df$gender))[1,1]
+males2 <- as.matrix(table(wk2df$gender))[2,1]
+
+
+datafram3 <- data.frame(avglabs= avglabs3, avgmeds= avgmeds3, avgproc= avgproc3, avgem= avgem3, avgage= avgage3, females= females3, males= males3)
+datafram2 <- data.frame(avglabs= avglabs2, avgmeds= avgmeds2, avgproc= avgproc2, avgem= avgem2, avgage= avgage2, females= females2, males= males2)
+flext <- flextable(data= datafram3)
+pptx <- ph_with_flextable(pptx, value= flext, type= "body", index= 2)
+flext2 <- flextable(data= datafram2)
+
+
+#Add Additional Slide for comparing two datasets:
+pptx <- add_slide(pptx, layout= "Comparison", master= theme)
+pptx <- ph_with_text(pptx, type= "title", str= "Comparison of week 2 and week 3")
+pptx <- ph_with_text(pptx, type= "body", str= "Week 2", index= 1)
+pptx <- ph_with_text(pptx, type= "body", str= "Week 3", index= 5)
+
+#content of the above new slide (data table of each set):
+pptx <- ph_with_flextable(pptx, value= flext2, type= "body", index= 2)
+pptx <- ph_with_flextable(pptx, value= flext, type= "body", index= 4)
+
+#New slide (final), with images of my code:
+pptx <- add_slide(pptx, layout= "Two Content", master= theme)
+pptx <- ph_with_text(pptx, type= "title", str= "Proof of Code")
+pptx <- ph_with_img(pptx, type= "body", src= "HW8 code1.png", height= 4.5, width= 4, index= 3)
+pptx <- ph_with_img(pptx, type= "body", src= "HW8 code2.png", height= 4.5, width= 4, index= 2)
+
+
+
+filename <- paste0('GSmall HW8_.pptx')
+print(pptx, target= filename)
+
+
+#END.................................................................................................................................
+
+
+
+
+
+
+
