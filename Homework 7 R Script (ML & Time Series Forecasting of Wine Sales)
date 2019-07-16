@@ -17,7 +17,7 @@ library(dygraphs)
 library(ggplot2)
 options(scipen= 999)
 
-setwd('C:\\Users\\Gsmall\\OneDrive - Moderna Therapeutics\\MyPC\\Documents\\HW2 folder\\HW7')
+setwd(...)
 x <- getURL('https://raw.githubusercontent.com/kwartler/HarvardSpringStudent2019/master/bookDatasets/AustralianWines.csv')
 df <- read.csv(text= x, header= TRUE)
 
