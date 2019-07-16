@@ -1,0 +1,191 @@
+## Geoffrey Small
+## 03/28/2019
+## HW6 R Script
+## Instructor: Ted Kwartler
+
+### Purpose: Time Series Analysis (including decomposition) and Predictive Modeling of pre- and post-9/11 ridership data, as well as stocks (with KPIs)
+
+library(RCurl)
+library(forecast)
+library(ModelMetrics)
+library(lubridate)
+library(dplyr)
+library(dygraphs)
+
+setwd('C:\\Users\\Gsmall\\OneDrive - Moderna Therapeutics\\MyPC\\Documents\\HW2 folder\\HW6')
+x <- getURL('https://raw.githubusercontent.com/kwartler/HarvardSpringStudent2019/212ab51e08d1ff8511e2f553eea99b530c05be3a/bookDatasets/Sept11Travel_REVISED.csv')
+df <- read.csv(text= x, header= TRUE)
+
+#PART 0 ---> EDA.........................................................................................................
+summary(df)
+dim(df)  #172 rows/obervations, 4 columns/variables
+class(df$Month) #factor
+head(df)
+
+cleanDate <- dmy(paste("01-", df$Month , sep =""))
+class(cleanDate)
+df$Month <- cleanDate
+class(df$Month) #from factor to date class
+
+
+colnames(df)[2] <- "Actual airline revenue passenger miles (Air, 000s)"
+colnames(df)[3] <- "Rail passener miles (Rail)"
+colnames(df)[4] <- "Vehicle miles trveled (Car, billions)"
+pre <- df[(df$Month < "2001-09-01"), ]
+post <- df[(df$Month >= "2001-09-01"), ]
+
+#Comprehensive time series:
+ridersair <- ts(df$`Actual airline revenue passenger miles (Air, 000s)`, start= c(1990, 1), end= c(2004, 1), frequency= 12)
+plot(ridersair, xlab= "Month", ylab= "Actual airline revenue passenger miles (Air, 000s)")
+ridersrail <- ts(df$`Rail passener miles (Rail)`, start= c(1990, 1), end= c(2004, 1), frequency= 12)
+plot(ridersrail, xlab= "Month", ylab= "Rail passener miles (Rail)")
+riderscar <- ts(df$`Vehicle miles trveled (Car, billions)`, start= c(1990, 1), end= c(2004, 1), frequency= 12)
+plot(riderscar, xlab= "Month", ylab= "Vehicle miles trveled (Car, billions)")
+
+
+#Question 16.1 (a.)................................................................................................................................
+
+#ANSWER: The goal of this study is descriptive, as they compared forecasted series data with actual data to assess the impact of the 
+#September 11 terrorist attack on US transportation. It was a comparative study, not a predictive one of new/unknown data
+
+
+#Question 16.1 (b.)...................................................................................................................
+
+
+#Pre-event time series
+
+#Air..................................................................................................
+pre_air <- ts(pre$`Actual airline revenue passenger miles (Air, 000s)`, start= c(1990, 1), end= c(2001, 8), frequency= 12)
+#Trendline:
+pre_air.lm <- tslm(pre_air ~ trend)
+plot(pre_air, xlab= "Month", main= "Air Travel Data Pre-9/11", ylab= "Actual airline revenue passenger miles (Air, 000s)")
+lines(pre_air.lm$fitted.values, lwd = 2)
+
+#Naive- Drift 12 months ahead
+driftTS <- rwf(pre_air, drift=T, h=12)
+plot(driftTS, xlab= "Month", ylab= "Actual airline revenue passenger miles (Air, 000s)")  
+#Random walk forecast of data clearly shows a predicted continued increase in total miles, although it would actually DECREASE with 9/11
+
+#Try Seasonal Naive- 12 months ahead
+seasonalNaive <- snaive(pre_air, h=12)
+plot(seasonalNaive, xlab= "Month", ylab= "Actual airline revenue passenger miles (Air, 000s)")
+
+#.............................................................................................................................
+#Rail
+pre_rail <- ts(pre$`Rail passener miles (Rail)`, start= c(1990, 1), end= c(2001, 8), frequency= 12)
+#Trendline:
+pre_rail.lm <- tslm(pre_rail ~ trend + I(trend^2))    #Quadratic time series linear model trendline
+plot(pre_rail, main= "Rail Travel Pre-9/11", xlab= "Month", ylab= "Rail passener miles (Rail)")
+lines(pre_rail.lm$fitted.values, lwd = 2)
+
+#Try Seasonal Naive- 12 months ahead
+seasonalNaive2 <- snaive(pre_rail, h=12)
+plot(seasonalNaive2, xlab= "Month", ylab= "Rail passener miles (Rail)")
+#Naive- Drift 12 months ahead
+driftTS2 <- rwf(pre_rail, drift=T, h=12)
+plot(driftTS2, xlab= "Month", ylab= "Rail passener miles (Rail)") 
+
+#.............................................................................................................................
+#Car
+pre_car <- ts(pre$`Vehicle miles trveled (Car, billions)`, start= c(1990, 1), end= c(2001, 8), frequency= 12)
+#Trendline:
+pre_car.lm <- tslm(pre_car ~ trend)
+plot(pre_car, main= "Car Travel Pre-9/11", xlab= "Month", ylab= "Vehicle miles traveled (Car, billions)")
+lines(pre_car.lm$fitted.values, lwd = 2)
+#Try Seasonal Naive- 12 months ahead
+seasonalNaive3 <- snaive(pre_car, h=12)
+plot(seasonalNaive3, xlab= "Month", ylab= "Vehicle miles traveled (Car, billions)")
+#Naive- Drift 12 months ahead
+driftTS3 <- rwf(pre_car, drift=T, h=12)
+plot(driftTS3, xlab= "Month", ylab= "Vehicle miles traveled (Car, billions)") 
+
+#16.1 (b., i.)............................................................................................................................
+
+#ANSWER: First of all, observing the time series models for all three methods of transportation seems to indicate that they all 
+#        display properties of additive time series models. This is since seasonal variation appears constant, even when the time series
+#       increases or decreases over time. 
+#       -Air Travel: The time series model plot shows seasonality components, as well as a generally linear upward trend leading up to 09-11-2001
+#       -Rail Travel: Shows seasonality components, as well as a potential quadratic trend (See trendline plots from code above)
+#       -Car Travel: There is a clear seasonal trend here, as well as a linear upward trend leading up to 09-11-2001
+#For all of the above, there is most likely some degree of noise, which will be made evident in the following code...
+#Additionally, the observance of seasonality could be supported by the behavior of the models when we apply seaonal naive forecasting,
+#which reflects the existing seasonality in the models
+
+#16.1 (b., ii.).............................................................................................................................
+
+#Zoom:
+colnames(pre)
+#convert pre to extensible time series object(xts) for use in dygraph:
+pre_xts <- xts(pre[,-1], order.by=pre[,1])
+dygraph(pre_xts) %>%
+  dySeries("Actual airline revenue passenger miles (Air, 000s)", label = "Air") %>%
+  dySeries("Rail passener miles (Rail)", label = "Rail") %>%
+  dySeries("Vehicle miles trveled (Car, billions)", label = "Car") %>%
+  dyOptions(stackedGraph = TRUE) %>%
+  dyRangeSelector(height = 20)
+#Zooming in shows Clear Trends in Seasonality. Even more profound if one plots each individual time series model on a single plot
+
+#Trendlines:
+pre_air.lm <- tslm(pre_air ~ trend)
+
+
+#STL decomposition for seasonal and trend decomposition. This method is more complex than decompose(), as it allows seasonality to change:
+pre_air %>% stl(s.window= 'periodic') %>% autoplot
+pre_air %>% decompose(type= )
+pre_rail %>% stl(s.window= 'periodic') %>% autoplot
+pre_rail %>% decompose(type= )
+pre_car %>% stl(s.window= 'periodic') %>% autoplot
+pre_car %>% decompose(type= )
+
+#Decompose seasonal data only. Decompose() assumes seasonality repeats year to year:
+pre_air_decomp <- decompose(pre_air, type= "additive")
+plot(pre_air_decomp)
+pre_rail_decomp <- decompose(pre_rail, type= "additive")
+plot(pre_rail_decomp)
+pre_car_decomp <- decompose(pre_car, type= "additive")
+plot(pre_car_decomp)
+
+
+
+
+
+#ANSWER: -Zooming in shows ClEAR Trends in Seasonality. Even more profound if one plots each individual time series model on a single plot (so each model has it's respective scale)
+#        - I also created time series linear/quadratic models for each time series model. Both air travel and car travel were fit well with linear upward trendlines, while rail travel
+#          displayed a fit with a quadratic trendline.
+#        -Suppression of seasonality is accomplished with stl() and/or decompose(). Applying both of these functions (see above), 
+#        there is clearly noise present in the original time series for all 3 models (evident by "random"/"remainder" time series plots).
+#       Additionally, these decomposition data show a linear increasing trend for both Air and Car travel, while Rail is quadratic in nature (possibly due to rough times faced by Amtrack in the 1990s).
+#       Finally, the decomposition of seasonality creates a time series plots that shows the seasonal trends of all 3 models (air, rail, car)
+
+#PROBLEM 2 (STOCKS)............................................................................................................................
+
+
+#Using "1_REVISED_TTR_homework.R," I chose the relative strength index (RSI) for my kpi. I chose this, as it is an indicator that measure 
+#the speed and change of prices on the stock market, using 14 trading periods each. Additionally, it is largely considered to indicate 
+#overbought conditions when RSI > 70 and oversold when RSI < 30. With such simplicity and reliability, the RSI is an important kpi 
+#used by investors for making more informed investment decisions. During a bull market, the RSI generally remains in the higher ranges, 
+#while during a bear market it will lower considerably. It is calculated by the following equation: 
+ 
+            #RSI (single step) = 100 - (100 / (1 + (avg. upward gain/ avg. downward loss)))
+
+
+
+#I chose the stock tickers for Moderna Inc (NASDAQ: MRNA) and Barrick Gold Corp (NYSE: GOLD). I chose Moderna, as it is my current source 
+#of employment. I also chose Barrick Gold Corp, as I have a knowledge of economic geology and this company is subject constant controversy 
+#in the investment media (I personally would not invest in them).
+
+#a.)	Let's take a look at Moderna Inc:
+  #Running the Professor's code, the stock price is currently USD 19.27, down from previous highs less than a month ago. The RSI shows a 
+  #value of 43.15, a neutral value near 50 (viewed as support value). The reason this is neutral is most likely due to a low volume of shares 
+  #being bought and sold, as there are no recent press releases of good/bad company news. However, back on February 15, 2019, the RSI reached 
+  #84.1, with a stock price of USD 21.44/share. This could have been due to a press release that a new vaccine candidate met Phase 1 clinical 
+  #testing goals. That point was above the overbought signal, thus a good time to sell shares.
+
+#b.)	Barrick Gold Corp:
+  #A simple look at the stock prices over the last year is enough to indicate that this is a risky stock- such is the nature of most mining 
+  #stocks. The current RSI is at 67.46, just under the overbought signal. Due to this upper neutral region, I would refrain from buying and 
+  #selling, especially given how the media has generally negative views. Also, reading the projected earnings increases for the current fiscal 
+  #year and keeping up to date with press releases would help make a more informed decision on managing any existing holdings in this company
+
+
+#END OF QUESTION 2.....................................................................................................................................
